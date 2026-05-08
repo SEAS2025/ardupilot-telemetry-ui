@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>ArduPilot Telemetry</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/assets/style.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -134,10 +135,23 @@
       </section>
     </div>
 
+    <section class="panel map-panel">
+      <div class="map-header">
+        <h2>Drone position</h2>
+        <div class="map-toolbar">
+          <span id="mapStatus" class="map-status">Not connected</span>
+          <button type="button" class="btn ghost map-recenter" id="btnMapRecenter">Recenter</button>
+        </div>
+      </div>
+      <div id="droneMap" class="drone-map" role="application" aria-label="Map of reported drone position"></div>
+      <p class="map-foot">Map tiles need internet (OpenStreetMap / CARTO). Position from MAVLink <code class="mono">GLOBAL_POSITION_INT</code>.</p>
+    </section>
+
     <footer class="footer">
       <span>API: <code class="mono">/api/*</code> · WS: <code class="mono">/ws/telemetry</code></span>
     </footer>
   </div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/assets/app.js"></script>
 </body>
 </html>

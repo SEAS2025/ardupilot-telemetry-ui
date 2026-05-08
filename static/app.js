@@ -37,9 +37,131 @@ function setConnectedUI(connected) {
   }
 }
 
+let droneMap = null;
+let droneMarker = null;
+let mapUserPanned = false;
+let mapDidInitialFit = false;
+let lastGpsFix = null;
+
+function gpsLooksValid(lat, lon) {
+  if (lat == null || lon == null) return false;
+  const a = Number(lat);
+  const b = Number(lon);
+  if (Number.isNaN(a) || Number.isNaN(b)) return false;
+  if (Math.abs(a) > 90 || Math.abs(b) > 180) return false;
+  if (Math.abs(a) < 1e-7 && Math.abs(b) < 1e-7) return false;
+  return true;
+}
+
+function initDroneMap() {
+  const el = $("droneMap");
+  if (!el || typeof L === "undefined") return;
+  droneMap = L.map("droneMap", { zoomControl: true }).setView([20, 0], 2);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains: "abcd",
+    maxZoom: 20,
+  }).addTo(droneMap);
+  droneMarker = L.circleMarker([0, 0], {
+    radius: 10,
+    fillColor: "#3d9cf9",
+    color: "#e8ecf4",
+    weight: 2,
+    opacity: 1,
+    fillOpacity: 0.92,
+  });
+  droneMap.on("dragend", () => {
+    mapUserPanned = true;
+  });
+  requestAnimationFrame(() => {
+    if (droneMap) droneMap.invalidateSize();
+  });
+}
+
+function resetMapTracking() {
+  mapUserPanned = false;
+  mapDidInitialFit = false;
+  lastGpsFix = null;
+  const statusEl = $("mapStatus");
+  if (statusEl) statusEl.textContent = "Not connected";
+  if (droneMap && droneMarker && droneMap.hasLayer(droneMarker)) {
+    droneMap.removeLayer(droneMarker);
+  }
+}
+
+function updateDroneMap(gps, heartbeat, vfr) {
+  const statusEl = $("mapStatus");
+  if (!droneMap || !droneMarker) return;
+
+  const lat = gps?.lat;
+  const lon = gps?.lon;
+
+  if (!gpsLooksValid(lat, lon)) {
+    lastGpsFix = null;
+    if (statusEl) {
+      statusEl.textContent =
+        "Linked — waiting for GNSS position (GLOBAL_POSITION_INT)";
+    }
+    if (droneMap.hasLayer(droneMarker)) droneMap.removeLayer(droneMarker);
+    return;
+  }
+
+  lastGpsFix = { lat, lon };
+  const ll = [lat, lon];
+  if (!droneMap.hasLayer(droneMarker)) {
+    droneMarker.setLatLng(ll);
+    droneMarker.addTo(droneMap);
+  } else {
+    droneMarker.setLatLng(ll);
+  }
+
+  const mode = heartbeat?.mode ?? "—";
+  const armed =
+    heartbeat?.armed === true
+      ? "armed"
+      : heartbeat?.armed === false
+        ? "disarmed"
+        : "?";
+  const rel = gps?.relative_alt_m;
+  const altLine =
+    rel != null && !Number.isNaN(Number(rel))
+      ? `<br>Rel alt ${Number(rel).toFixed(1)} m`
+      : "";
+  const gs = vfr?.groundspeed;
+  const gsLine =
+    gs != null && !Number.isNaN(Number(gs))
+      ? `<br>GS ${Number(gs).toFixed(1)} m/s`
+      : "";
+  droneMarker.bindPopup(
+    `<strong>Drone</strong><br>${fmtNum(lat, 6)}, ${fmtNum(lon, 6)}${altLine}<br>${mode} · ${armed}${gsLine}`
+  );
+
+  if (statusEl) {
+    const bits = [
+      `${fmtNum(lat, 5)}, ${fmtNum(lon, 5)}`,
+      rel != null && !Number.isNaN(Number(rel)) ? ` · ${Number(rel).toFixed(0)} m AHL` : "",
+    ];
+    statusEl.textContent = bits.join("");
+  }
+
+  if (!mapUserPanned) {
+    if (!mapDidInitialFit) {
+      droneMap.setView(ll, 17, { animate: true });
+      mapDidInitialFit = true;
+    } else {
+      droneMap.panTo(ll, { animate: false });
+    }
+  }
+}
+
 function applyTelemetry(data) {
   setConnectedUI(!!data.connected);
   $("errorBar").hidden = true;
+
+  if (!data.connected) {
+    resetMapTracking();
+  }
 
   const hb = data.heartbeat || {};
   $("vMode").textContent = hb.mode ?? "—";
@@ -74,6 +196,8 @@ function applyTelemetry(data) {
     s.voltage_v != null ? `${fmtNum(s.voltage_v, 2)} V` : "—";
   $("vBat").textContent =
     s.battery_remaining_pct != null ? `${s.battery_remaining_pct}%` : "—";
+
+  updateDroneMap(g, hb, v);
 
   if (data.last_error) {
     $("errorBar").textContent = data.last_error;
@@ -154,6 +278,14 @@ async function postQuickAction(command) {
 }
 
 async function main() {
+  initDroneMap();
+  $("btnMapRecenter")?.addEventListener("click", () => {
+    mapUserPanned = false;
+    if (lastGpsFix && droneMap) {
+      droneMap.setView([lastGpsFix.lat, lastGpsFix.lon], 17, { animate: true });
+    }
+  });
+
   document.querySelectorAll("[data-quick]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const command = btn.getAttribute("data-quick");
@@ -179,6 +311,8 @@ async function main() {
         method: "POST",
         body: JSON.stringify({ port, baud }),
       });
+      mapUserPanned = false;
+      mapDidInitialFit = false;
       applyTelemetry(data);
     } catch (e) {
       showErr(e);
