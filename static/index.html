@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ArduPilot Telemetry</title>
+  <link rel="stylesheet" href="/assets/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <span class="logo" aria-hidden="true"></span>
+        <div>
+          <h1>ArduPilot Telemetry</h1>
+          <p class="sub">MAVLink over USB serial (915&nbsp;MHz radio pair)</p>
+        </div>
+      </div>
+      <div class="status-pill" id="connPill">
+        <span class="dot" id="connDot"></span>
+        <span id="connLabel">Disconnected</span>
+      </div>
+    </header>
+
+    <section class="panel connect-panel">
+      <h2>Connection</h2>
+      <div class="row">
+        <label class="field">
+          <span>Serial port</span>
+          <select id="portSelect"></select>
+        </label>
+        <label class="field">
+          <span>Baud</span>
+          <select id="baudSelect">
+            <option value="57600" selected>57600</option>
+            <option value="115200">115200</option>
+            <option value="921600">921600</option>
+          </select>
+        </label>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="btnRefreshPorts">Refresh ports</button>
+          <button type="button" class="btn primary" id="btnConnect">Connect</button>
+          <button type="button" class="btn ghost" id="btnDisconnect">Disconnect</button>
+        </div>
+      </div>
+      <p class="hint" id="hintBar">Select the COM port for your ground-side USB telemetry modem. Match baud to the radio’s serial rate.</p>
+      <p class="error" id="errorBar" hidden></p>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <h2>Flight state</h2>
+        <dl class="kv">
+          <dt>Mode</dt><dd id="vMode">—</dd>
+          <dt>Armed</dt><dd id="vArmed">—</dd>
+          <dt>Msgs</dt><dd id="vMsgs">0</dd>
+          <dt>Last MAVLink</dt><dd id="vLast">—</dd>
+        </dl>
+      </section>
+      <section class="panel">
+        <h2>Motion</h2>
+        <dl class="kv">
+          <dt>Groundspeed</dt><dd id="vGs">—</dd>
+          <dt>Airspeed</dt><dd id="vAs">—</dd>
+          <dt>Alt (HUD)</dt><dd id="vAlt">—</dd>
+          <dt>Heading</dt><dd id="vHdg">—</dd>
+        </dl>
+      </section>
+      <section class="panel">
+        <h2>Attitude</h2>
+        <dl class="kv">
+          <dt>Roll</dt><dd id="vRoll">—</dd>
+          <dt>Pitch</dt><dd id="vPitch">—</dd>
+          <dt>Yaw</dt><dd id="vYaw">—</dd>
+        </dl>
+      </section>
+      <section class="panel">
+        <h2>GNSS</h2>
+        <dl class="kv">
+          <dt>Lat</dt><dd id="vLat">—</dd>
+          <dt>Lon</dt><dd id="vLon">—</dd>
+          <dt>Rel alt</dt><dd id="vRelAlt">—</dd>
+        </dl>
+      </section>
+      <section class="panel">
+        <h2>Power</h2>
+        <dl class="kv">
+          <dt>Voltage</dt><dd id="vVolt">—</dd>
+          <dt>Battery</dt><dd id="vBat">—</dd>
+        </dl>
+      </section>
+      <section class="panel actions-panel">
+        <h2>Quick commands</h2>
+        <p class="warn">Only use where legal and safe. Confirm props cleared or vehicle restrained for bench tests.</p>
+        <div class="quick-actions">
+          <div class="quick-grid">
+            <button type="button" class="btn accent" data-quick="rtl" title="Set flight mode to RTL">Return to home</button>
+            <button type="button" class="btn primary" data-quick="takeoff" title="MAV_CMD_NAV_TAKEOFF">Take off</button>
+            <button type="button" class="btn" data-quick="hover" title="LOITER / hold position">Hover</button>
+            <button type="button" class="btn" data-quick="gps_hold" title="GPS-assisted hold / nav">GPS hold</button>
+            <button type="button" class="btn" data-quick="manual" title="Stabilize / manual flight">Manual</button>
+            <button type="button" class="btn" data-quick="circle_here" title="Orbit current position if GNSS known">Circle here</button>
+            <button type="button" class="btn" data-quick="visual_nav" title="FLOWHOLD if available; else GUIDED/LOITER">Visual / flow</button>
+          </div>
+          <div class="quick-params">
+            <label class="field compact">
+              <span>Takeoff alt (m)</span>
+              <input type="number" id="takeoffAlt" value="10" min="1" max="500" step="0.5" />
+            </label>
+            <label class="field compact">
+              <span>Circle radius (m)</span>
+              <input type="number" id="circleRadius" value="60" min="5" max="800" step="1" />
+            </label>
+            <label class="field compact">
+              <span>Orbit speed (m/s)</span>
+              <input type="number" id="orbitSpeed" value="4" min="0.5" max="40" step="0.5" />
+            </label>
+          </div>
+        </div>
+        <h2 class="subh">Safety</h2>
+        <div class="btn-row wrap">
+          <button type="button" class="btn danger" id="btnArm">Arm</button>
+          <button type="button" class="btn" id="btnDisarm">Disarm</button>
+        </div>
+        <h2 class="subh">Custom mode</h2>
+        <label class="field inline">
+          <span>Mode name</span>
+          <input type="text" id="modeInput" placeholder="e.g. GUIDED, AUTO, LAND" autocomplete="off" />
+        </label>
+        <button type="button" class="btn primary full" id="btnMode">Apply mode</button>
+      </section>
+    </div>
+
+    <footer class="footer">
+      <span>API: <code class="mono">/api/*</code> · WS: <code class="mono">/ws/telemetry</code></span>
+    </footer>
+  </div>
+  <script src="/assets/app.js"></script>
+</body>
+</html>
